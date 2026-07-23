@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h4 class="card-title mb-3">Gesperrte IP-Adressen</h4>
+        {% if blocks %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead>
+              <tr>
+                <th>IP-Adresse</th>
+                <th>Fehlversuche</th>
+                <th>Gesperrt bis (UTC)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for block in blocks %}
+              <tr>
+                <td><code>{{ block.ip_address }}</code></td>
+                <td>{{ block.failed_attempts }}</td>
+                <td>{{ block.blocked_until.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                <td class="text-end">
+                  <form method="post" action="{{ url_for('unlock_ip', block_id=block.id) }}">
+                    <button type="submit" class="btn btn-sm btn-outline-success">Entsperren</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Derzeit sind keine IP-Adressen gesperrt.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

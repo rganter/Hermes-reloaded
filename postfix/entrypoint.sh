@@ -31,6 +31,10 @@ apply_smarthost_config() {
   if [ -f /shared/sasl_passwd ]; then
     postconf -e "smtp_sasl_password_maps = texthash:/shared/sasl_passwd"
   fi
+
+  if [ -f /shared/client_access ]; then
+    postconf -e "smtpd_client_restrictions = check_client_access texthash:/shared/client_access, permit_sasl_authenticated, reject"
+  fi
 }
 
 apply_smarthost_config
@@ -48,7 +52,7 @@ postfix check
   LAST_HASH=""
   while true; do
     sleep 5
-    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd 2>/dev/null | md5sum)"
+    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd /shared/client_access 2>/dev/null | md5sum)"
     if [ "$CUR_HASH" != "$LAST_HASH" ]; then
       LAST_HASH="$CUR_HASH"
       apply_smarthost_config

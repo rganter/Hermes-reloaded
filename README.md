@@ -112,6 +112,14 @@ Die WebGUI liest `/var/log/postfix/mail.log` (per Docker-Volume aus dem
 Postfix-Container gemountet) und zeigt die letzten Einträge, mit einfacher
 Volltextfilterung (z.B. nach Benutzername, Absender oder Statuscode).
 
+## Login-Schutz
+
+Die WebGUI wertet neue Postfix-Logzeilen mit fehlgeschlagenen SMTP-SASL-
+Anmeldungen aus. Nach der unter **Einstellungen** konfigurierten Anzahl
+Fehlversuche wird die jeweilige IP-Adresse für die festgelegte Anzahl Minuten
+in Postfix gesperrt. Unter **Sicherheit** werden aktive Sperren angezeigt und
+können bei Bedarf manuell aufgehoben werden.
+
 ## Datenbank-Initialisierung
 
 `mysql/init.sql` wird beim ersten Start eines **leeren** MariaDB-Datenvolumes

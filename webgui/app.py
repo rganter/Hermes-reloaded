@@ -1,6 +1,9 @@
 import os
 import re
 import time
+import ipaddress
+import threading
+from datetime import timedelta
 from datetime import datetime
 
 from flask import Flask, render_template, redirect, url_for, request, flash, send_file
@@ -44,6 +47,10 @@ LOGO_MIMETYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 }
+CLIENT_ACCESS_FILE = os.path.join(SHARED_DIR, "client_access")
+LOGIN_FAILURE_PATTERN = re.compile(
+    r"\[(?P<ip>[^\]]+)\]: SASL .*authentication failed", re.IGNORECASE
+)
 
 # Nur zur einmaligen Erstbefuellung der "settings"-Tabelle, falls noch leer.
 BOOTSTRAP_SMARTHOST = os.environ.get("SMARTHOST", "")
@@ -95,6 +102,34 @@ class Settings(db.Model):
     smarthost_user = db.Column(db.String(255), nullable=True)
     smarthost_password = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SecuritySettings(db.Model):
+    __tablename__ = "security_settings"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    max_login_failures = db.Column(db.Integer, nullable=False, default=5)
+    block_duration_minutes = db.Column(db.Integer, nullable=False, default=30)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LoginBlock(db.Model):
+    __tablename__ = "login_blocks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), unique=True, nullable=False)
+    failed_attempts = db.Column(db.Integer, nullable=False, default=0)
+    first_failure_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_failure_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    blocked_until = db.Column(db.DateTime, nullable=True)
+
+
+class LogMonitorState(db.Model):
+    __tablename__ = "log_monitor_state"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    log_inode = db.Column(db.String(64), nullable=True)
+    log_offset = db.Column(db.BigInteger, nullable=False, default=0)
 
 
 # Es gibt bewusst KEIN eigenes Admin-User-Modell in der DB - der GUI-Login
@@ -288,10 +323,156 @@ def get_settings() -> "Settings":
     return settings
 
 
+def get_security_settings() -> "SecuritySettings":
+    settings = SecuritySettings.query.get(1)
+    if settings is None:
+        settings = SecuritySettings(id=1)
+        db.session.add(settings)
+        db.session.commit()
+    return settings
+
+
+def write_client_access_map():
+    """Write active IP blocks for Postfix' dynamically read texthash map."""
+    os.makedirs(SHARED_DIR, exist_ok=True)
+    now = datetime.utcnow()
+    active_blocks = LoginBlock.query.filter(
+        LoginBlock.blocked_until.isnot(None),
+        LoginBlock.blocked_until > now,
+    ).order_by(LoginBlock.ip_address).all()
+
+    temporary = f"{CLIENT_ACCESS_FILE}.tmp"
+    with open(temporary, "w") as access_map:
+        for block in active_blocks:
+            access_map.write(f"{block.ip_address} REJECT\n")
+    os.replace(temporary, CLIENT_ACCESS_FILE)
+
+
+def expire_login_blocks():
+    expired = LoginBlock.query.filter(
+        LoginBlock.blocked_until.isnot(None),
+        LoginBlock.blocked_until <= datetime.utcnow(),
+    ).all()
+    if expired:
+        for block in expired:
+            db.session.delete(block)
+        db.session.commit()
+        write_client_access_map()
+
+
+def record_login_failure(ip_address):
+    """Count a failed SASL login and block the address at the configured limit."""
+    try:
+        ipaddress.ip_address(ip_address)
+    except ValueError:
+        return
+
+    now = datetime.utcnow()
+    security = get_security_settings()
+    block = LoginBlock.query.filter_by(ip_address=ip_address).first()
+    if block and block.blocked_until and block.blocked_until > now:
+        return
+    if block is None:
+        block = LoginBlock(ip_address=ip_address, first_failure_at=now)
+        db.session.add(block)
+
+    block.failed_attempts += 1
+    block.last_failure_at = now
+    if block.failed_attempts >= security.max_login_failures:
+        block.blocked_until = now + timedelta(minutes=security.block_duration_minutes)
+        db.session.commit()
+        write_client_access_map()
+        app.logger.warning(
+            "IP-Adresse %s bis %s wegen fehlgeschlagener Anmeldungen gesperrt.",
+            ip_address,
+            block.blocked_until.isoformat(),
+        )
+    else:
+        db.session.commit()
+
+
+def scan_login_failures():
+    """Read only newly appended Postfix log lines and record SASL failures."""
+    if not os.path.exists(LOG_FILE):
+        return
+
+    file_stat = os.stat(LOG_FILE)
+    inode = str(file_stat.st_ino)
+    state = LogMonitorState.query.get(1)
+    if state is None:
+        # Existing log history is not treated as a new attack after upgrades.
+        state = LogMonitorState(id=1, log_inode=inode, log_offset=file_stat.st_size)
+        db.session.add(state)
+        db.session.commit()
+        return
+
+    if state.log_inode != inode or file_stat.st_size < state.log_offset:
+        state.log_inode = inode
+        state.log_offset = 0
+
+    with open(LOG_FILE, "r", errors="replace") as log_file:
+        log_file.seek(state.log_offset)
+        lines = log_file.readlines()
+        state.log_offset = log_file.tell()
+    state.log_inode = inode
+
+    for line in lines:
+        match = LOGIN_FAILURE_PATTERN.search(line)
+        if match:
+            record_login_failure(match.group("ip"))
+    db.session.commit()
+
+
+def monitor_login_failures():
+    """Ensure exactly one Gunicorn worker monitors the shared Postfix log."""
+    while True:
+        lock_connection = None
+        try:
+            lock_connection = db.engine.raw_connection()
+            cursor = lock_connection.cursor()
+            cursor.execute("SELECT GET_LOCK('hermes_login_failure_monitor', 0)")
+            acquired = cursor.fetchone()[0] == 1
+            cursor.close()
+            if not acquired:
+                lock_connection.close()
+                time.sleep(5)
+                continue
+
+            app.logger.info("Starte Monitor fuer fehlgeschlagene SMTP-Anmeldungen.")
+            while True:
+                with app.app_context():
+                    try:
+                        expire_login_blocks()
+                        scan_login_failures()
+                    except Exception as exc:  # pragma: no cover
+                        app.logger.warning("Login-Schutzmonitor fehlgeschlagen: %s", exc)
+                    finally:
+                        db.session.remove()
+                time.sleep(5)
+        except Exception as exc:  # pragma: no cover
+            app.logger.warning("Login-Schutzmonitor nicht verfuegbar: %s", exc)
+            time.sleep(5)
+        finally:
+            if lock_connection is not None:
+                try:
+                    lock_connection.close()
+                except Exception:
+                    pass
+
+
+def start_login_failure_monitor():
+    threading.Thread(
+        target=monitor_login_failures,
+        name="login-failure-monitor",
+        daemon=True,
+    ).start()
+
+
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings_page():
     settings = get_settings()
+    security_settings = get_security_settings()
 
     if request.method == "POST":
         smarthost = request.form.get("smarthost", "").strip()
@@ -299,15 +480,28 @@ def settings_page():
         smarthost_user = request.form.get("smarthost_user", "").strip()
         smarthost_password = request.form.get("smarthost_password", "")
         logo = request.files.get("logo")
+        max_login_failures = request.form.get("max_login_failures", "").strip()
+        block_duration_minutes = request.form.get("block_duration_minutes", "").strip()
 
         if not smarthost or not smarthost_port:
             flash("Server und Port sind Pflichtfelder.", "danger")
-            return render_template("settings.html", settings=settings)
+            return render_template("settings.html", settings=settings,
+                                   security_settings=security_settings)
+        try:
+            max_login_failures = int(max_login_failures)
+            block_duration_minutes = int(block_duration_minutes)
+            if max_login_failures < 1 or block_duration_minutes < 1:
+                raise ValueError
+        except ValueError:
+            flash("Anzahl der Fehlversuche und Sperrdauer muessen positiv sein.", "danger")
+            return render_template("settings.html", settings=settings,
+                                   security_settings=security_settings)
         if logo and logo.filename:
             extension = os.path.splitext(logo.filename.lower())[1]
             if extension not in LOGO_FILENAMES:
                 flash("Bitte PNG, JPG, GIF oder WebP als Logo hochladen.", "danger")
-                return render_template("settings.html", settings=settings)
+                return render_template("settings.html", settings=settings,
+                                       security_settings=security_settings)
 
         settings.smarthost = smarthost
         settings.smarthost_port = int(smarthost_port)
@@ -319,6 +513,9 @@ def settings_page():
             # Kein Benutzername mehr -> auch gespeichertes Passwort verwerfen
             settings.smarthost_password = None
 
+        security_settings.max_login_failures = max_login_failures
+        security_settings.block_duration_minutes = block_duration_minutes
+
         db.session.commit()
         write_postfix_config(settings)
 
@@ -329,7 +526,31 @@ def settings_page():
               "Aenderungen innerhalb weniger Sekunden automatisch.", "success")
         return redirect(url_for("settings_page"))
 
-    return render_template("settings.html", settings=settings)
+    return render_template("settings.html", settings=settings,
+                           security_settings=security_settings)
+
+
+@app.route("/security/blocks")
+@login_required
+def blocked_ips():
+    expire_login_blocks()
+    blocks = LoginBlock.query.filter(
+        LoginBlock.blocked_until.isnot(None),
+        LoginBlock.blocked_until > datetime.utcnow(),
+    ).order_by(LoginBlock.blocked_until).all()
+    return render_template("blocked_ips.html", blocks=blocks)
+
+
+@app.route("/security/blocks/<int:block_id>/unlock", methods=["POST"])
+@login_required
+def unlock_ip(block_id):
+    block = LoginBlock.query.get_or_404(block_id)
+    ip_address = block.ip_address
+    db.session.delete(block)
+    db.session.commit()
+    write_client_access_map()
+    flash(f"IP-Adresse {ip_address} wurde entsperrt.", "success")
+    return redirect(url_for("blocked_ips"))
 
 
 # ---------------------------------------------------------------------------
@@ -397,10 +618,14 @@ with app.app_context():
     # (z.B. nach einem "docker compose down/up" mit frischem Postfix-Volume).
     try:
         _settings = get_settings()
+        get_security_settings()
         if _settings.smarthost:
             write_postfix_config(_settings)
+        write_client_access_map()
     except Exception as exc:  # pragma: no cover
         app.logger.warning("Konnte Smarthost-Konfiguration nicht schreiben: %s", exc)
+
+    start_login_failure_monitor()
 
 
 if __name__ == "__main__":

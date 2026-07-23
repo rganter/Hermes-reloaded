@@ -39,6 +39,19 @@
             <img src="{{ logo_url }}" alt="Aktuelles Logo" class="img-thumbnail mt-2" style="max-height: 80px; max-width: 100%;">
             {% endif %}
           </div>
+          <hr>
+          <h5 class="mb-3">Login-Schutz</h5>
+          <div class="mb-3">
+            <label class="form-label">Fehlversuche bis zur Sperre</label>
+            <input type="number" name="max_login_failures" class="form-control"
+                   value="{{ security_settings.max_login_failures }}" min="1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sperrdauer (Minuten)</label>
+            <input type="number" name="block_duration_minutes" class="form-control"
+                   value="{{ security_settings.block_duration_minutes }}" min="1" required>
+            <div class="form-text">Sperrt eine IP nach der festgelegten Anzahl fehlgeschlagener SMTP-Anmeldungen.</div>
+          </div>
           <button type="submit" class="btn btn-primary">Speichern</button>
         </form>
         <p class="text-muted small mt-3 mb-0">
