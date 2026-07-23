@@ -373,10 +373,15 @@ def record_login_failure(ip_address):
     if block and block.blocked_until and block.blocked_until > now:
         return
     if block is None:
-        block = LoginBlock(ip_address=ip_address, first_failure_at=now)
+        block = LoginBlock(
+            ip_address=ip_address,
+            failed_attempts=0,
+            first_failure_at=now,
+            last_failure_at=now,
+        )
         db.session.add(block)
 
-    block.failed_attempts += 1
+    block.failed_attempts = (block.failed_attempts or 0) + 1
     block.last_failure_at = now
     if block.failed_attempts >= security.max_login_failures:
         block.blocked_until = now + timedelta(minutes=security.block_duration_minutes)
