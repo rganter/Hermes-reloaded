@@ -3,7 +3,7 @@ import re
 import time
 from datetime import datetime
 
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,6 +30,20 @@ LOG_MAX_LINES = 1000
 # Gemeinsames Volume mit dem Postfix-Container, ueber das die
 # Smarthost-Konfiguration (Relayhost + SASL-Zugangsdaten) uebergeben wird.
 SHARED_DIR = os.environ.get("SHARED_DIR", "/shared")
+LOGO_FILENAMES = {
+    ".png": "logo.png",
+    ".jpg": "logo.jpg",
+    ".jpeg": "logo.jpeg",
+    ".gif": "logo.gif",
+    ".webp": "logo.webp",
+}
+LOGO_MIMETYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
 
 # Nur zur einmaligen Erstbefuellung der "settings"-Tabelle, falls noch leer.
 BOOTSTRAP_SMARTHOST = os.environ.get("SMARTHOST", "")
@@ -43,11 +57,15 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
     f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
 
 db = SQLAlchemy(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+# Eine geschuetzte Seite leitet direkt zum Login weiter, ohne eine irrefuehrende
+# Standardmeldung auf der Login-Seite einzublenden.
+login_manager.login_message = None
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +110,41 @@ def load_user(user_id):
     return None
 
 
+def get_logo_path():
+    """Return the persisted logo file and its extension, if configured."""
+    for extension, filename in LOGO_FILENAMES.items():
+        path = os.path.join(SHARED_DIR, filename)
+        if os.path.isfile(path):
+            return path, extension
+    return None, None
+
+
+def save_logo(logo):
+    """Persist an uploaded logo in the shared Docker volume."""
+    extension = os.path.splitext(logo.filename.lower())[1]
+    if extension not in LOGO_FILENAMES:
+        raise ValueError("Bitte PNG, JPG, GIF oder WebP als Logo hochladen.")
+
+    os.makedirs(SHARED_DIR, exist_ok=True)
+    target = os.path.join(SHARED_DIR, LOGO_FILENAMES[extension])
+    temporary = f"{target}.upload"
+    logo.save(temporary)
+    os.replace(temporary, target)
+
+    for filename in LOGO_FILENAMES.values():
+        old_logo = os.path.join(SHARED_DIR, filename)
+        if old_logo != target and os.path.isfile(old_logo):
+            os.remove(old_logo)
+
+
+@app.context_processor
+def inject_logo():
+    path, _ = get_logo_path()
+    if path:
+        return {"logo_url": url_for("logo", v=int(os.path.getmtime(path)))}
+    return {"logo_url": None}
+
+
 # ---------------------------------------------------------------------------
 # Auth-Routen
 # ---------------------------------------------------------------------------
@@ -105,6 +158,14 @@ def login():
             return redirect(url_for("users_list"))
         flash("Benutzername oder Passwort falsch.", "danger")
     return render_template("login.html")
+
+
+@app.route("/logo")
+def logo():
+    path, extension = get_logo_path()
+    if not path:
+        return "", 404
+    return send_file(path, mimetype=LOGO_MIMETYPES[extension], conditional=True)
 
 
 @app.route("/logout")
@@ -237,10 +298,16 @@ def settings_page():
         smarthost_port = request.form.get("smarthost_port", "587").strip()
         smarthost_user = request.form.get("smarthost_user", "").strip()
         smarthost_password = request.form.get("smarthost_password", "")
+        logo = request.files.get("logo")
 
         if not smarthost or not smarthost_port:
             flash("Server und Port sind Pflichtfelder.", "danger")
             return render_template("settings.html", settings=settings)
+        if logo and logo.filename:
+            extension = os.path.splitext(logo.filename.lower())[1]
+            if extension not in LOGO_FILENAMES:
+                flash("Bitte PNG, JPG, GIF oder WebP als Logo hochladen.", "danger")
+                return render_template("settings.html", settings=settings)
 
         settings.smarthost = smarthost
         settings.smarthost_port = int(smarthost_port)
@@ -255,8 +322,11 @@ def settings_page():
         db.session.commit()
         write_postfix_config(settings)
 
-        flash("Smarthost-Konfiguration gespeichert. Postfix uebernimmt die "
-              "Aenderung innerhalb weniger Sekunden automatisch.", "success")
+        if logo and logo.filename:
+            save_logo(logo)
+
+        flash("Einstellungen gespeichert. Postfix uebernimmt Smarthost-"
+              "Aenderungen innerhalb weniger Sekunden automatisch.", "success")
         return redirect(url_for("settings_page"))
 
     return render_template("settings.html", settings=settings)

@@ -63,6 +63,8 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
      veröffentlichte Host-Ports für SMTP, Submission und WebGUI; standardmäßig
      `25`, `587` und `8080`. Die Container verwenden intern weiterhin die
      Standardports 25, 587 und 8080.
+   - `TZ`: IANA-Zeitzone für Container-Logs und Zeitstempel, z.B.
+     `Europe/Berlin` (Standard) oder `UTC`.
    - `MYNETWORKS`: i.d.R. auf `127.0.0.0/8` belassen, dann muss **jeder**
      Client sich per SASL authentifizieren. Nur erweitern, wenn ihr bestimmten
      IP-Netzen zusätzlich ohne Auth vertrauen wollt.

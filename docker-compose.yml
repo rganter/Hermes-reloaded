@@ -8,6 +8,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Europe/Berlin}
     volumes:
       - mysql_data:/var/lib/mysql
       # Das gesamte Init-Verzeichnis mounten: Datei-Bind-Mounts koennen unter
@@ -35,6 +36,7 @@ services:
       DB_NAME: ${MYSQL_DATABASE}
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Europe/Berlin}
     volumes:
       - dovecot_auth:/var/spool/postfix-auth
     healthcheck:
@@ -59,6 +61,7 @@ services:
       - "${SUBMISSION_PORT:-587}:587"
     environment:
       MAIL_DOMAIN: ${MAIL_DOMAIN}
+      TZ: ${TZ:-Europe/Berlin}
       # Optional; ohne Wert wird relay.<MAIL_DOMAIN> verwendet.
       POSTFIX_FQDN: ${POSTFIX_FQDN:-}
       # Nur Fallback/Erststart - die eigentliche, dauerhafte Konfiguration
@@ -85,6 +88,7 @@ services:
       DB_NAME: ${MYSQL_DATABASE}
       DB_USER: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: ${TZ:-Europe/Berlin}
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       SECRET_KEY: ${SECRET_KEY}

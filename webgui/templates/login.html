@@ -4,6 +4,11 @@
   <div class="col-md-4 mt-5">
     <div class="card shadow-sm">
       <div class="card-body">
+        {% if logo_url %}
+        <div class="text-center mb-4">
+          <img src="{{ logo_url }}" alt="Logo" class="login-logo">
+        </div>
+        {% endif %}
         <h4 class="card-title mb-3">Anmelden</h4>
         <form method="post">
           <div class="mb-3">

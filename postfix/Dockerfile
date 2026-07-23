@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends postfix libsasl2-modules gettext-base && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends postfix libsasl2-modules gettext-base tzdata && \
     rm -rf /var/lib/apt/lists/*
 
 COPY main.cf.template /etc/postfix/main.cf.template
