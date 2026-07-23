@@ -433,11 +433,12 @@ def monitor_login_failures():
     while True:
         lock_connection = None
         try:
-            lock_connection = db.engine.raw_connection()
-            cursor = lock_connection.cursor()
-            cursor.execute("SELECT GET_LOCK('hermes_login_failure_monitor', 0)")
-            acquired = cursor.fetchone()[0] == 1
-            cursor.close()
+            with app.app_context():
+                lock_connection = db.engine.raw_connection()
+                cursor = lock_connection.cursor()
+                cursor.execute("SELECT GET_LOCK('hermes_login_failure_monitor', 0)")
+                acquired = cursor.fetchone()[0] == 1
+                cursor.close()
             if not acquired:
                 lock_connection.close()
                 time.sleep(5)
