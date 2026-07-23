@@ -33,7 +33,7 @@ apply_smarthost_config() {
   fi
 
   if [ -f /shared/client_access ]; then
-    postconf -e "smtpd_client_restrictions = check_client_access texthash:/shared/client_access, permit_mynetworks, permit_sasl_authenticated, reject"
+    postconf -e "smtpd_client_restrictions = check_client_access texthash:/shared/client_access"
   fi
 }
 

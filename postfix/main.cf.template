@@ -31,7 +31,10 @@ smtpd_tls_security_level = may
 
 smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
 smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
-smtpd_client_restrictions = permit_mynetworks, permit_sasl_authenticated, reject
+# Die dynamische IP-Sperrliste wird beim Start gesetzt, sobald die WebGUI ihre
+# Access-Map angelegt hat. Weitere Relay-Pruefungen erfolgen separat ueber
+# smtpd_relay_restrictions.
+smtpd_client_restrictions =
 
 # ---- Logging ----
 maillog_file = /var/log/postfix/mail.log

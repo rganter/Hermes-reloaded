@@ -118,7 +118,9 @@ Die WebGUI wertet neue Postfix-Logzeilen mit fehlgeschlagenen SMTP-SASL-
 Anmeldungen aus. Nach der unter **Einstellungen** konfigurierten Anzahl
 Fehlversuche wird die jeweilige IP-Adresse für die festgelegte Anzahl Minuten
 in Postfix gesperrt. Unter **Sicherheit** werden aktive Sperren angezeigt und
-können bei Bedarf manuell aufgehoben werden.
+können bei Bedarf manuell aufgehoben werden. Eine aktive Sperre wird bereits
+beim Verbindungsaufbau durchgesetzt; eine SMTP-Authentifizierung ist dann nicht
+mehr möglich.
 
 Nach einem Update dieser Funktion müssen die lokal gebauten Container neu
 erstellt werden, damit die Postfix- und WebGUI-Änderungen aktiv sind:
