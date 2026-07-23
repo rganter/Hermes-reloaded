@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mariadb:11
-    container_name: smtp_mysql
+    container_name: C7CU-Hermes-Reloaded_DB
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -16,7 +16,7 @@ services:
 
   dovecot:
     build: ./dovecot
-    container_name: smtp_dovecot
+    container_name: C7CU-Hermes-Reloaded_dovecot
     restart: unless-stopped
     depends_on:
       - mysql
@@ -32,7 +32,7 @@ services:
 
   postfix:
     build: ./postfix
-    container_name: smtp_postfix
+    container_name: C7CU-Hermes-Reloaded_postfix
     restart: unless-stopped
     depends_on:
       - dovecot
@@ -56,7 +56,7 @@ services:
 
   webgui:
     build: ./webgui
-    container_name: smtp_webgui
+    container_name: C7CU-Hermes-Reloaded_webgui
     restart: unless-stopped
     depends_on:
       - mysql
