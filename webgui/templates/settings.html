@@ -30,6 +30,11 @@
             <label class="form-label">Passwort (leer lassen, um es unveraendert zu lassen)</label>
             <input type="password" name="smarthost_password" class="form-control">
           </div>
+          <p class="text-muted small mt-3 mb-0">
+            Ohne Benutzername liefert Postfix ohne SASL-Authentifizierung an
+            diesen Smarthost aus. Stelle in diesem Fall sicher, dass der
+            Smarthost die IP dieses Servers als vertrauenswürdig einstuft.
+          </p>
           <hr>
           <div class="mb-3">
             <label class="form-label">Logo</label>
@@ -54,11 +59,6 @@
           </div>
           <button type="submit" class="btn btn-primary">Speichern</button>
         </form>
-        <p class="text-muted small mt-3 mb-0">
-          Ohne Benutzername liefert Postfix ohne SASL-Authentifizierung an
-          diesen Smarthost aus. Stelle in diesem Fall sicher, dass der
-          Smarthost die IP dieses Servers als vertrauenswürdig einstuft.
-        </p>
         {% if settings.updated_at %}
         <p class="text-muted small mt-3 mb-0">
           Zuletzt geaendert: {{ settings.updated_at.strftime('%d.%m.%Y %H:%M') }}

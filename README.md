@@ -120,6 +120,13 @@ Fehlversuche wird die jeweilige IP-Adresse für die festgelegte Anzahl Minuten
 in Postfix gesperrt. Unter **Sicherheit** werden aktive Sperren angezeigt und
 können bei Bedarf manuell aufgehoben werden.
 
+Nach einem Update dieser Funktion müssen die lokal gebauten Container neu
+erstellt werden, damit die Postfix- und WebGUI-Änderungen aktiv sind:
+
+```bash
+docker compose up -d --build --force-recreate postfix webgui
+```
+
 ## Datenbank-Initialisierung
 
 `mysql/init.sql` wird beim ersten Start eines **leeren** MariaDB-Datenvolumes
