@@ -1,4 +1,4 @@
-myhostname = relay.${MAIL_DOMAIN}
+myhostname = ${POSTFIX_FQDN}
 mydomain = ${MAIL_DOMAIN}
 myorigin = $mydomain
 mydestination =

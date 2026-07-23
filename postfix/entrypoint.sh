@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
 
-envsubst '${MAIL_DOMAIN} ${MYNETWORKS}' \
+# Bestehende Installationen ohne POSTFIX_FQDN behalten ihr bisheriges
+# Hostnamensschema bei.
+POSTFIX_FQDN="${POSTFIX_FQDN:-relay.${MAIL_DOMAIN}}"
+
+envsubst '${MAIL_DOMAIN} ${MYNETWORKS} ${POSTFIX_FQDN}' \
   < /etc/postfix/main.cf.template \
   > /etc/postfix/main.cf
 

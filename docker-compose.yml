@@ -55,10 +55,12 @@ services:
         condition: service_healthy
     ports:
       # klassischer SMTP-Port UND Submission-Port, beide mit Auth-Pflicht
-      - "25:25"
-      - "587:587"
+      - "${SMTP_PORT:-25}:25"
+      - "${SUBMISSION_PORT:-587}:587"
     environment:
       MAIL_DOMAIN: ${MAIL_DOMAIN}
+      # Optional; ohne Wert wird relay.<MAIL_DOMAIN> verwendet.
+      POSTFIX_FQDN: ${POSTFIX_FQDN:-}
       # Nur Fallback/Erststart - die eigentliche, dauerhafte Konfiguration
       # erfolgt ueber die WebGUI (Menuepunkt "Smarthost") und liegt in MySQL.
       SMARTHOST: ${SMARTHOST}
@@ -93,7 +95,7 @@ services:
       SMARTHOST_USER: ${SMARTHOST_USER}
       SMARTHOST_PASSWORD: ${SMARTHOST_PASSWORD}
     ports:
-      - "8080:8080"
+      - "${WEBGUI_PORT:-8080}:8080"
     volumes:
       - maillog:/var/log/postfix:ro
       - smarthost_config:/shared:rw

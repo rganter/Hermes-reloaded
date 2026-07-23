@@ -57,6 +57,12 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
    - `SMARTHOST`, `SMARTHOST_PORT`, `SMARTHOST_USER`, `SMARTHOST_PASSWORD`:
      Zugangsdaten für den vorgelagerten Mailserver.
    - `MAIL_DOMAIN`: eure Absenderdomain.
+   - `POSTFIX_FQDN`: vollständiger Hostname von Postfix, z.B.
+     `relay.example.com`. Ohne Angabe wird `relay.<MAIL_DOMAIN>` verwendet.
+   - `SMTP_PORT` / `SUBMISSION_PORT` / `WEBGUI_PORT`: nach außen
+     veröffentlichte Host-Ports für SMTP, Submission und WebGUI; standardmäßig
+     `25`, `587` und `8080`. Die Container verwenden intern weiterhin die
+     Standardports 25, 587 und 8080.
    - `MYNETWORKS`: i.d.R. auf `127.0.0.0/8` belassen, dann muss **jeder**
      Client sich per SASL authentifizieren. Nur erweitern, wenn ihr bestimmten
      IP-Netzen zusätzlich ohne Auth vertrauen wollt.
