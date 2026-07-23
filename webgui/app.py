@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import SQLAlchemyError
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
     login_required, current_user
@@ -289,19 +289,38 @@ def logs():
 
 
 def wait_for_database(max_retries=30, delay=2):
-    for attempt in range(max_retries):
+    """Wait until MariaDB accepts queries before creating application tables."""
+    app.logger.info(
+        "Warte auf MariaDB unter %s (maximal %d Versuche).",
+        DB_HOST,
+        max_retries,
+    )
+    for attempt in range(1, max_retries + 1):
         try:
             with db.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            app.logger.info("MariaDB erreichbar.")
+            app.logger.info("MariaDB ist nach %d Versuch(en) erreichbar.", attempt)
             return
-        except OperationalError:
-            app.logger.info("Warte auf MariaDB (%d/%d)...", attempt+1, max_retries)
+        except SQLAlchemyError as exc:
+            if attempt == max_retries:
+                app.logger.error(
+                    "MariaDB war nach %d Versuchen nicht erreichbar: %s",
+                    max_retries,
+                    exc,
+                )
+                raise RuntimeError("MariaDB konnte nicht erreicht werden.") from exc
+            app.logger.warning(
+                "MariaDB noch nicht erreichbar (%d/%d): %s. Neuer Versuch in %d Sekunden.",
+                attempt,
+                max_retries,
+                exc,
+                delay,
+            )
             time.sleep(delay)
-    raise RuntimeError("MariaDB konnte nicht erreicht werden.")
 
 with app.app_context():
     wait_for_database()
+    app.logger.info("Initialisiere Datenbankschema.")
     db.create_all()
     # Beim Start sicherstellen, dass Postfix eine aktuelle Konfiguration
     # vorfindet - auch wenn seit dem letzten GUI-Save nichts geaendert wurde

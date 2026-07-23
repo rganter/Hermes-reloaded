@@ -10,7 +10,16 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Das gesamte Init-Verzeichnis mounten: Datei-Bind-Mounts koennen unter
+      # Docker Desktop als Verzeichnis aufgeloest werden. MariaDB versucht dann
+      # ein Verzeichnis als SQL-Eingabe zu lesen ("stdin").
+      - ./mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping --host=localhost --user=root --password=\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - smtp_internal
 
@@ -19,7 +28,8 @@ services:
     container_name: C7CU-Hermes-Reloaded_dovecot
     restart: unless-stopped
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       DB_HOST: mysql
       DB_NAME: ${MYSQL_DATABASE}
@@ -27,6 +37,12 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - dovecot_auth:/var/spool/postfix-auth
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /var/spool/postfix-auth/auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     networks:
       - smtp_internal
 
@@ -35,7 +51,8 @@ services:
     container_name: C7CU-Hermes-Reloaded_postfix
     restart: unless-stopped
     depends_on:
-      - dovecot
+      dovecot:
+        condition: service_healthy
     ports:
       # klassischer SMTP-Port UND Submission-Port, beide mit Auth-Pflicht
       - "25:25"
@@ -59,7 +76,8 @@ services:
     container_name: C7CU-Hermes-Reloaded_webgui
     restart: unless-stopped
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       DB_HOST: mysql
       DB_NAME: ${MYSQL_DATABASE}

@@ -50,3 +50,8 @@ virtual   unix  -       n       n       -       -       virtual
 lmtp      unix  -       -       n       -       -       lmtp
 anvil     unix  -       -       n       -       1       anvil
 scache    unix  -       -       n       -       1       scache
+
+# Interner Logger fuer maillog_file. Der unix-dgram-Service wird von
+# aktuellen Postfix-Versionen benoetigt, damit Container-Logging ohne Syslog
+# funktioniert.
+postlog   unix-dgram n  -       n       -       1       postlogd

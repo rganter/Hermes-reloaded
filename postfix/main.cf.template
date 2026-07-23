@@ -8,7 +8,9 @@ inet_protocols = ipv4
 append_dot_mydomain = no
 biff = no
 readme_directory = no
-compatibility_level = 3
+# Postfix 3.6 fuehrte die aktuelle Kompatibilitaetssemantik ein. Der explizite
+# Wert verhindert Upgrade-Warnungen bei aktuellen Postfix-Versionen.
+compatibility_level = 3.6
 
 # ---- Ausgehend: alles geht an den vorgelagerten Smarthost ----
 # relayhost und smtp_sasl_password_maps werden NICHT hier statisch gesetzt,

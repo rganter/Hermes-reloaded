@@ -8,9 +8,6 @@ envsubst '${MAIL_DOMAIN} ${MYNETWORKS}' \
 mkdir -p /var/log/postfix /var/spool/postfix-auth
 chown postfix:postfix /var/log/postfix
 
-# Postfix chroot-Verzeichnisse initialisieren
-/usr/sbin/postfix set-permissions 2>/dev/null || true
-
 # ---------------------------------------------------------------------------
 # Smarthost-Konfiguration wird von der WebGUI in /shared abgelegt:
 #   /shared/relayhost.txt   -> Inhalt: "[host]:port"
@@ -33,6 +30,12 @@ apply_smarthost_config() {
 }
 
 apply_smarthost_config
+
+# Die Paketinstallation setzt die erforderlichen Dateirechte bereits. Ein
+# erneutes "postfix set-permissions" in einem Container fuehrt bei aktuellen
+# Postfix-Versionen zu einem fehlgeschlagenen Integritaetscheck. Stattdessen
+# pruefen wir die fertige Konfiguration einmal vor dem Start.
+postfix check
 
 # Hintergrund-Watcher: erkennt Aenderungen an der Smarthost-Konfiguration
 # (von der WebGUI geschrieben) und laedt Postfix automatisch neu - kein

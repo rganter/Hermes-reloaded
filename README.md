@@ -1,4 +1,4 @@
-# SMTP-Relay mit User-Authentifizierung (Postfix + Dovecot-SASL + MySQL + WebGUI)
+# Hermes 2.0.1 - SMTP-Relay mit User-Authentifizierung (Postfix + Dovecot-SASL + MariaDB + WebGUI)
 
 Ein schlanker SMTP-Relay-Server für interne Systeme (z.B. Scanner, Applikationen),
 die per Benutzername/Passwort authentifiziert Mails über einen vorgelagerten
@@ -68,6 +68,11 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
    docker compose up -d --build
    ```
 
+   Docker Compose wartet mit Dovecot und der WebGUI, bis MariaDB ihren
+   Healthcheck bestanden hat. Die WebGUI prueft beim Start zusaetzlich per
+   Datenbankabfrage bis zu 30-mal im Abstand von zwei Sekunden, bevor sie ihr
+   Schema anlegt.
+
 3. WebGUI aufrufen: `http://<server>:8080` und mit `ADMIN_USER`/`ADMIN_PASSWORD`
    anmelden. Dort Benutzer für die Scanner/Systeme anlegen.
 
@@ -98,6 +103,14 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
 Die WebGUI liest `/var/log/postfix/mail.log` (per Docker-Volume aus dem
 Postfix-Container gemountet) und zeigt die letzten Einträge, mit einfacher
 Volltextfilterung (z.B. nach Benutzername, Absender oder Statuscode).
+
+## Datenbank-Initialisierung
+
+`mysql/init.sql` wird beim ersten Start eines **leeren** MariaDB-Datenvolumes
+ausgefuehrt. Das gesamte Verzeichnis `mysql/` wird in das offizielle
+MariaDB-Init-Verzeichnis eingebunden; dadurch wird die Datei auch unter Docker
+Desktop verlaesslich als SQL-Datei erkannt. Bestehende Volumes werden von
+MariaDB absichtlich nicht erneut initialisiert.
 
 ## Struktur
 
