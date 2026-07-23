@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1 - 2026-07-23
+
+### Hinzugefuegt
+
+- Konfigurierbare externe SMTP-, Submission- und WebGUI-Ports sowie Postfix-FQDN.
+- Konfigurierbare Container-Zeitzone.
+- Persistenter Logo-Upload fuer Login-Seite und Navigation.
+- Konfigurierbarer Schutz gegen fehlgeschlagene SMTP-Anmeldungen mit
+  Sperrlisten-Uebersicht und manueller Entsperrung.
+
+### Behoben
+
+- IP-Sperren werden bereits vor der SMTP-Authentifizierung durchgesetzt.
+- Zuverlaessige Auswertung fehlgeschlagener Anmeldungen durch den WebGUI-Monitor.
+
 ## 2.0.1 - 2026-07-23
 
 ### Behoben
