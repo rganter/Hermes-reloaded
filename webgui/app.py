@@ -1,9 +1,12 @@
 import os
 import re
+import time
 from datetime import datetime
 
 from flask import Flask, render_template, redirect, url_for, request, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
     login_required, current_user
@@ -283,7 +286,22 @@ def logs():
 
 
 # ---------------------------------------------------------------------------
+
+
+def wait_for_database(max_retries=30, delay=2):
+    for attempt in range(max_retries):
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            app.logger.info("MariaDB erreichbar.")
+            return
+        except OperationalError:
+            app.logger.info("Warte auf MariaDB (%d/%d)...", attempt+1, max_retries)
+            time.sleep(delay)
+    raise RuntimeError("MariaDB konnte nicht erreicht werden.")
+
 with app.app_context():
+    wait_for_database()
     db.create_all()
     # Beim Start sicherstellen, dass Postfix eine aktuelle Konfiguration
     # vorfindet - auch wenn seit dem letzten GUI-Save nichts geaendert wurde
