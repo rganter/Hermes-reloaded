@@ -1,0 +1,93 @@
+services:
+  mysql:
+    image: mariadb:11
+    container_name: smtp_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - smtp_internal
+
+  dovecot:
+    build: ./dovecot
+    container_name: smtp_dovecot
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      DB_HOST: mysql
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - dovecot_auth:/var/spool/postfix-auth
+    networks:
+      - smtp_internal
+
+  postfix:
+    build: ./postfix
+    container_name: smtp_postfix
+    restart: unless-stopped
+    depends_on:
+      - dovecot
+    ports:
+      # klassischer SMTP-Port UND Submission-Port, beide mit Auth-Pflicht
+      - "25:25"
+      - "587:587"
+    environment:
+      MAIL_DOMAIN: ${MAIL_DOMAIN}
+      # Nur Fallback/Erststart - die eigentliche, dauerhafte Konfiguration
+      # erfolgt ueber die WebGUI (Menuepunkt "Smarthost") und liegt in MySQL.
+      SMARTHOST: ${SMARTHOST}
+      SMARTHOST_PORT: ${SMARTHOST_PORT}
+      MYNETWORKS: ${MYNETWORKS}
+    volumes:
+      - dovecot_auth:/var/spool/postfix-auth
+      - maillog:/var/log/postfix
+      - smarthost_config:/shared:ro
+    networks:
+      - smtp_internal
+
+  webgui:
+    build: ./webgui
+    container_name: smtp_webgui
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      DB_HOST: mysql
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USER: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+      # Nur zur einmaligen Erstbefuellung der "settings"-Tabelle beim allerersten
+      # Start. Danach ist die Datenbank (per WebGUI gepflegt) fuehrend.
+      SMARTHOST: ${SMARTHOST}
+      SMARTHOST_PORT: ${SMARTHOST_PORT}
+      SMARTHOST_USER: ${SMARTHOST_USER}
+      SMARTHOST_PASSWORD: ${SMARTHOST_PASSWORD}
+    ports:
+      - "8080:8080"
+    volumes:
+      - maillog:/var/log/postfix:ro
+      - smarthost_config:/shared:rw
+    networks:
+      - smtp_internal
+
+volumes:
+  mysql_data:
+  dovecot_auth:
+  maillog:
+  smarthost_config:
+
+networks:
+  smtp_internal:
+    driver: bridge

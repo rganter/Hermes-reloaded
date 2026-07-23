@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h4 class="card-title mb-1">Smarthost-Konfiguration</h4>
+        <p class="text-muted small mb-3">
+          Der vorgelagerte Mailserver, an den Postfix alle eingehenden Mails
+          weiterleitet. Aenderungen werden von Postfix automatisch innerhalb
+          weniger Sekunden uebernommen (kein Neustart noetig).
+        </p>
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Server (Hostname)</label>
+            <input type="text" name="smarthost" class="form-control"
+                   value="{{ settings.smarthost }}" placeholder="mail.example.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Port</label>
+            <input type="number" name="smarthost_port" class="form-control"
+                   value="{{ settings.smarthost_port }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Benutzername (leer lassen, wenn der Smarthost keine Authentifizierung verlangt, z.B. bei IP-Whitelisting)</label>
+            <input type="text" name="smarthost_user" class="form-control"
+                   value="{{ settings.smarthost_user or '' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Passwort (leer lassen, um es unveraendert zu lassen)</label>
+            <input type="password" name="smarthost_password" class="form-control">
+          </div>
+          <button type="submit" class="btn btn-primary">Speichern</button>
+        </form>
+        <p class="text-muted small mt-3 mb-0">
+          Ohne Benutzername liefert Postfix ohne SASL-Authentifizierung an
+          diesen Smarthost aus. Stelle in diesem Fall sicher, dass der
+          Smarthost die IP dieses Servers als vertrauenswürdig einstuft.
+        </p>
+        {% if settings.updated_at %}
+        <p class="text-muted small mt-3 mb-0">
+          Zuletzt geaendert: {{ settings.updated_at.strftime('%d.%m.%Y %H:%M') }}
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

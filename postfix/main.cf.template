@@ -1,0 +1,35 @@
+myhostname = relay.${MAIL_DOMAIN}
+mydomain = ${MAIL_DOMAIN}
+myorigin = $mydomain
+mydestination =
+mynetworks = 127.0.0.0/8, ${MYNETWORKS}
+inet_interfaces = all
+inet_protocols = ipv4
+append_dot_mydomain = no
+biff = no
+readme_directory = no
+compatibility_level = 3
+
+# ---- Ausgehend: alles geht an den vorgelagerten Smarthost ----
+# relayhost und smtp_sasl_password_maps werden NICHT hier statisch gesetzt,
+# sondern beim Container-Start (und bei jeder Aenderung ueber die WebGUI)
+# per "postconf -e" aus /shared/relayhost.txt bzw. /shared/sasl_passwd
+# uebernommen (siehe entrypoint.sh).
+smtp_sasl_auth_enable = yes
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = encrypt
+smtp_use_tls = yes
+
+# ---- Eingehend: SASL-Auth der Scanner/Systeme gegen Dovecot (-> MySQL) ----
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = /var/spool/postfix-auth/auth
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_security_options = noanonymous
+smtpd_tls_security_level = may
+
+smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
+smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
+smtpd_client_restrictions = permit_mynetworks, permit_sasl_authenticated, reject
+
+# ---- Logging ----
+maillog_file = /var/log/postfix/mail.log

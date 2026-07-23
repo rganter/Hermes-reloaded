@@ -1,0 +1,6 @@
+driver = mysql
+connect = host=${DB_HOST} dbname=${DB_NAME} user=${DB_USER} password=${DB_PASSWORD}
+
+default_pass_scheme = SHA512-CRYPT
+
+password_query = SELECT username AS user, password FROM users WHERE username = '%u' AND active = 1

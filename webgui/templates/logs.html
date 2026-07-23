@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>SMTP-Logs</h4>
+  <form method="get" class="d-flex">
+    <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm me-2"
+           placeholder="Filter, z.B. Benutzername oder Absender" style="width: 300px;">
+    <button type="submit" class="btn btn-sm btn-primary">Filtern</button>
+    {% if search %}
+      <a href="{{ url_for('logs') }}" class="btn btn-sm btn-outline-secondary ms-2">Zuruecksetzen</a>
+    {% endif %}
+  </form>
+</div>
+
+<p class="text-muted small">Quelle: {{ log_file }} &middot; zeigt die letzten {{ lines|length }} passenden Zeilen (neueste zuerst)</p>
+
+<pre class="bg-dark text-light p-3 rounded" style="font-size: 0.8rem; max-height: 75vh; overflow-y: auto;">{% for line in lines %}{{ line }}{% endfor %}{% if not lines %}Keine Log-Eintraege gefunden.{% endif %}</pre>
+{% endblock %}

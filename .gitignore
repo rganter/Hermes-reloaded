@@ -1,0 +1,12 @@
+# Umgebungsvariablen mit Zugangsdaten - NIEMALS committen
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor/OS
+.DS_Store
+*.swp
