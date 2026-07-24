@@ -35,6 +35,17 @@ apply_smarthost_config() {
   if [ -f /shared/client_access ]; then
     postconf -e "smtpd_client_restrictions = check_client_access texthash:/shared/client_access"
   fi
+
+  if [ -f /shared/message_size_limit ]; then
+    MESSAGE_SIZE_LIMIT="$(tr -d '\r\n' < /shared/message_size_limit)"
+    case "$MESSAGE_SIZE_LIMIT" in
+      ""|*[!0-9]*)
+        ;;
+      *)
+        postconf -e "message_size_limit = ${MESSAGE_SIZE_LIMIT}"
+        ;;
+    esac
+  fi
 }
 
 apply_smarthost_config
@@ -61,7 +72,7 @@ postfix check
   LAST_HASH=""
   while true; do
     sleep 5
-    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd /shared/client_access /shared/sender_login_maps 2>/dev/null | md5sum)"
+    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd /shared/client_access /shared/sender_login_maps /shared/message_size_limit 2>/dev/null | md5sum)"
     if [ "$CUR_HASH" != "$LAST_HASH" ]; then
       LAST_HASH="$CUR_HASH"
       apply_smarthost_config

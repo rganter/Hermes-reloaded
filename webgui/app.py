@@ -7,6 +7,7 @@ import threading
 import uuid
 from datetime import timedelta
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import Flask, render_template, redirect, url_for, request, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
@@ -131,7 +132,13 @@ class Settings(db.Model):
     smarthost_port = db.Column(db.Integer, nullable=False, default=587)
     smarthost_user = db.Column(db.String(255), nullable=True)
     smarthost_password = db.Column(db.String(255), nullable=True)
+    message_size_limit = db.Column(db.BigInteger, nullable=False, default=10240000)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def message_size_limit_mb(self):
+        value = Decimal(self.message_size_limit) / Decimal(1_000_000)
+        return format(value.normalize(), "f")
 
 
 class SecuritySettings(db.Model):
@@ -405,6 +412,10 @@ def write_postfix_config(settings: "Settings"):
         # gespeicherte Credentials nicht weiter verwendet werden
         open(sasl_path, "w").close()
 
+    message_size_path = os.path.join(SHARED_DIR, "message_size_limit")
+    with open(message_size_path, "w") as size_file:
+        size_file.write(f"{settings.message_size_limit}\n")
+
 
 def get_settings() -> "Settings":
     settings = Settings.query.get(1)
@@ -618,12 +629,30 @@ def settings_page():
         smarthost_port = request.form.get("smarthost_port", "587").strip()
         smarthost_user = request.form.get("smarthost_user", "").strip()
         smarthost_password = request.form.get("smarthost_password", "")
+        message_size_limit_mb = request.form.get("message_size_limit_mb", "").strip()
         logo = request.files.get("logo")
         max_login_failures = request.form.get("max_login_failures", "").strip()
         block_duration_minutes = request.form.get("block_duration_minutes", "").strip()
 
         if not smarthost or not smarthost_port:
             flash("Server und Port sind Pflichtfelder.", "danger")
+            return render_template("settings.html", settings=settings,
+                                   security_settings=security_settings)
+        try:
+            size_mb = Decimal(message_size_limit_mb.replace(",", "."))
+            if size_mb < Decimal("1") or size_mb > Decimal("102400"):
+                raise InvalidOperation
+            message_size_limit = int(
+                (size_mb * Decimal(1_000_000)).quantize(
+                    Decimal("1"),
+                    rounding=ROUND_HALF_UP,
+                )
+            )
+        except (InvalidOperation, ValueError):
+            flash(
+                "Die maximale Mailgroesse muss zwischen 1 und 102400 MB liegen.",
+                "danger",
+            )
             return render_template("settings.html", settings=settings,
                                    security_settings=security_settings)
         try:
@@ -645,6 +674,7 @@ def settings_page():
         settings.smarthost = smarthost
         settings.smarthost_port = int(smarthost_port)
         settings.smarthost_user = smarthost_user or None
+        settings.message_size_limit = message_size_limit
         # Passwort nur ueberschreiben, wenn ein neues eingegeben wurde
         if smarthost_password:
             settings.smarthost_password = smarthost_password
@@ -846,13 +876,15 @@ def wait_for_database(max_retries=30, delay=2):
             time.sleep(delay)
 
 
-def ensure_sender_rule_columns():
-    """Add sender-rule columns when a database was initialized by an older image."""
+def ensure_schema_columns():
+    """Add columns when a database was initialized by an older image."""
     statements = (
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
         "allowed_sender_domain VARCHAR(255) NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
         "allow_any_sender TINYINT(1) NOT NULL DEFAULT 0",
+        "ALTER TABLE settings ADD COLUMN IF NOT EXISTS "
+        "message_size_limit BIGINT NOT NULL DEFAULT 10240000",
     )
     with db.engine.begin() as connection:
         for statement in statements:
@@ -863,7 +895,7 @@ with app.app_context():
     wait_for_database()
     app.logger.info("Initialisiere Datenbankschema.")
     db.create_all()
-    ensure_sender_rule_columns()
+    ensure_schema_columns()
     # Beim Start sicherstellen, dass Postfix eine aktuelle Konfiguration
     # vorfindet - auch wenn seit dem letzten GUI-Save nichts geaendert wurde
     # (z.B. nach einem "docker compose down/up" mit frischem Postfix-Volume).

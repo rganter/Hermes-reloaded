@@ -10,6 +10,7 @@
   SASL-Benutzer gehoeren.
 - Mailqueue-Uebersicht in der WebGUI mit gezielter erneuter Zustellung
   oder Loeschung einzelner Nachrichten.
+- Ueber die WebGUI konfigurierbares Postfix-`message_size_limit`.
 
 ## 2.1 - 2026-07-23
 

@@ -37,6 +37,12 @@ Postfix-Container prüft alle 5 Sekunden, ob sich diese Dateien geändert haben,
 übernimmt die Werte per `postconf -e` und führt automatisch `postfix reload`
 aus – ganz ohne Container-Neustart.
 
+Unter **Einstellungen** kann zudem die maximale Groesse eingehender
+SMTP-Nachrichten in MB festgelegt werden. Die WebGUI setzt daraus dynamisch
+Postfix' `message_size_limit`. Das Limit umfasst die komplette Nachricht
+einschliesslich Envelope und MIME-Kodierung; ein niedrigeres Limit des
+Smarthosts gilt weiterhin zusaetzlich.
+
 **Authentifizierung gegenüber dem Smarthost ist optional.** Benutzername und
 Passwort können in der WebGUI leer gelassen werden – dann liefert Postfix
 ohne SASL-Auth an den Smarthost aus (z.B. wenn dieser stattdessen die
