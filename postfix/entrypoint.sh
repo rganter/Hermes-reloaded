@@ -39,6 +39,15 @@ apply_smarthost_config() {
 
 apply_smarthost_config
 
+# Die WebGUI erzeugt diese Map aus den Benutzerregeln. Beim allerersten Start
+# kurz darauf warten, damit Postfix nicht mit einer fehlenden Lookup-Datei
+# startet. Eine leere Map ist absichtlich "deny by default".
+WAIT_COUNT=0
+while [ ! -f /shared/sender_login_maps ] && [ "$WAIT_COUNT" -lt 30 ]; do
+  sleep 2
+  WAIT_COUNT=$((WAIT_COUNT + 1))
+done
+
 # Die Paketinstallation setzt die erforderlichen Dateirechte bereits. Ein
 # erneutes "postfix set-permissions" in einem Container fuehrt bei aktuellen
 # Postfix-Versionen zu einem fehlgeschlagenen Integritaetscheck. Stattdessen
@@ -52,7 +61,7 @@ postfix check
   LAST_HASH=""
   while true; do
     sleep 5
-    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd /shared/client_access 2>/dev/null | md5sum)"
+    CUR_HASH="$(cat /shared/relayhost.txt /shared/sasl_passwd /shared/client_access /shared/sender_login_maps 2>/dev/null | md5sum)"
     if [ "$CUR_HASH" != "$LAST_HASH" ]; then
       LAST_HASH="$CUR_HASH"
       apply_smarthost_config

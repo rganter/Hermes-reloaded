@@ -10,6 +10,7 @@
     <tr>
       <th>Benutzername</th>
       <th>Status</th>
+      <th>Erlaubte Absender</th>
       <th>Angelegt</th>
       <th>Aktualisiert</th>
       <th class="text-end">Aktionen</th>
@@ -26,6 +27,18 @@
           <span class="badge bg-secondary">deaktiviert</span>
         {% endif %}
       </td>
+      <td>
+        {% if user.allow_any_sender %}
+          <span class="badge bg-warning text-dark">beliebig</span>
+        {% else %}
+          {% for sender in user.sender_addresses %}
+            <span class="badge bg-light text-dark border">{{ sender.sender_address }}</span>
+          {% endfor %}
+          {% if user.allowed_sender_domain %}
+            <span class="badge bg-info text-dark">@{{ user.allowed_sender_domain }}</span>
+          {% endif %}
+        {% endif %}
+      </td>
       <td>{{ user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at }}</td>
       <td>{{ user.updated_at.strftime('%d.%m.%Y %H:%M') if user.updated_at }}</td>
       <td class="text-end">
@@ -37,7 +50,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="5" class="text-center text-muted">Noch keine Benutzer angelegt.</td></tr>
+    <tr><td colspan="6" class="text-center text-muted">Noch keine Benutzer angelegt.</td></tr>
     {% endfor %}
   </tbody>
 </table>

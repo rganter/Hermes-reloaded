@@ -48,6 +48,7 @@ LOGO_MIMETYPES = {
     ".webp": "image/webp",
 }
 CLIENT_ACCESS_FILE = os.path.join(SHARED_DIR, "client_access")
+SENDER_LOGIN_MAP_FILE = os.path.join(SHARED_DIR, "sender_login_maps")
 LOGIN_FAILURE_PATTERN = re.compile(
     r"\[(?P<ip>[^\]]+)\]: SASL .*authentication failed", re.IGNORECASE
 )
@@ -85,12 +86,36 @@ class SmtpUser(db.Model):
     username = db.Column(db.String(190), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)  # SHA512-CRYPT Hash
     active = db.Column(db.Boolean, default=True, nullable=False)
+    allowed_sender_domain = db.Column(db.String(255), nullable=True)
+    allow_any_sender = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    sender_addresses = db.relationship(
+        "UserSenderAddress",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="UserSenderAddress.sender_address",
+    )
 
     def set_password(self, plain_password: str):
         # Erzeugt einen Hash im Dovecot-kompatiblen SHA512-CRYPT-Format
         self.password = sha512_crypt.hash(plain_password)
+
+
+class UserSenderAddress(db.Model):
+    __tablename__ = "user_sender_addresses"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "sender_address", name="uq_user_sender_address"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sender_address = db.Column(db.String(320), nullable=False)
+    user = db.relationship("SmtpUser", back_populates="sender_addresses")
 
 
 class Settings(db.Model):
@@ -226,6 +251,55 @@ def users_list():
     return render_template("users.html", users=users)
 
 
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._@+-]+$")
+EMAIL_PATTERN = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
+DOMAIN_PATTERN = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
+
+
+def parse_sender_rules():
+    """Validate and normalize the sender restrictions from the user form."""
+    raw_addresses = request.form.get("sender_addresses", "")
+    addresses = []
+    for value in re.split(r"[\r\n,;]+", raw_addresses):
+        address = value.strip().lower()
+        if address and address not in addresses:
+            addresses.append(address)
+
+    invalid_addresses = [address for address in addresses if not EMAIL_PATTERN.fullmatch(address)]
+    domain = request.form.get("allowed_sender_domain", "").strip().lower()
+    if domain.startswith("@"):
+        domain = domain[1:]
+    allow_any = bool(request.form.get("allow_any_sender"))
+
+    if invalid_addresses:
+        return None, None, None, (
+            "Ungueltige Absenderadresse(n): " + ", ".join(invalid_addresses)
+        )
+    if domain and not DOMAIN_PATTERN.fullmatch(domain):
+        return None, None, None, "Die erlaubte Absenderdomain ist ungueltig."
+    if not allow_any and not addresses and not domain:
+        return None, None, None, (
+            "Mindestens eine Absenderadresse, eine Domain oder die Ausnahme "
+            "fuer beliebige Absender ist erforderlich."
+        )
+    return addresses, domain or None, allow_any, None
+
+
+def apply_sender_rules(user, addresses, domain, allow_any):
+    user.allowed_sender_domain = domain
+    user.allow_any_sender = allow_any
+    user.sender_addresses = [
+        UserSenderAddress(sender_address=address) for address in addresses
+    ]
+
+
 @app.route("/users/new", methods=["GET", "POST"])
 @login_required
 def user_new():
@@ -233,9 +307,18 @@ def user_new():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         active = bool(request.form.get("active"))
+        addresses, domain, allow_any, sender_error = parse_sender_rules()
 
         if not username or not password:
             flash("Benutzername und Passwort sind Pflichtfelder.", "danger")
+            return render_template("user_form.html", user=None)
+
+        if not USERNAME_PATTERN.fullmatch(username):
+            flash("Der Benutzername enthaelt unzulaessige Zeichen.", "danger")
+            return render_template("user_form.html", user=None)
+
+        if sender_error:
+            flash(sender_error, "danger")
             return render_template("user_form.html", user=None)
 
         if SmtpUser.query.filter_by(username=username).first():
@@ -244,8 +327,10 @@ def user_new():
 
         user = SmtpUser(username=username, active=active)
         user.set_password(password)
+        apply_sender_rules(user, addresses, domain, allow_any)
         db.session.add(user)
         db.session.commit()
+        write_sender_login_map()
         flash(f"Benutzer '{username}' wurde angelegt.", "success")
         return redirect(url_for("users_list"))
 
@@ -259,10 +344,17 @@ def user_edit(user_id):
 
     if request.method == "POST":
         password = request.form.get("password", "")
+        addresses, domain, allow_any, sender_error = parse_sender_rules()
+        if sender_error:
+            flash(sender_error, "danger")
+            return render_template("user_form.html", user=user)
+
         user.active = bool(request.form.get("active"))
         if password:
             user.set_password(password)
+        apply_sender_rules(user, addresses, domain, allow_any)
         db.session.commit()
+        write_sender_login_map()
         flash(f"Benutzer '{user.username}' wurde aktualisiert.", "success")
         return redirect(url_for("users_list"))
 
@@ -275,6 +367,7 @@ def user_delete(user_id):
     user = SmtpUser.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
+    write_sender_login_map()
     flash(f"Benutzer '{user.username}' wurde geloescht.", "success")
     return redirect(url_for("users_list"))
 
@@ -346,6 +439,41 @@ def write_client_access_map():
         for block in active_blocks:
             access_map.write(f"{block.ip_address} REJECT\n")
     os.replace(temporary, CLIENT_ACCESS_FILE)
+
+
+def write_sender_login_map():
+    """Write Postfix regexp ownership rules for authenticated envelope senders."""
+    os.makedirs(SHARED_DIR, exist_ok=True)
+    users = SmtpUser.query.filter_by(active=True).order_by(SmtpUser.username).all()
+    any_owners = {user.username for user in users if user.allow_any_sender}
+    domain_owners = {}
+    address_owners = {}
+
+    for user in users:
+        if user.allowed_sender_domain:
+            domain_owners.setdefault(user.allowed_sender_domain.lower(), set()).add(user.username)
+        for sender in user.sender_addresses:
+            address_owners.setdefault(sender.sender_address.lower(), set()).add(user.username)
+
+    lines = []
+    for address, owners in sorted(address_owners.items()):
+        address_domain = address.rsplit("@", 1)[1]
+        all_owners = owners | domain_owners.get(address_domain, set()) | any_owners
+        pattern = re.escape(address)
+        lines.append(f"/^{pattern}$/i {','.join(sorted(all_owners))}\n")
+
+    for domain, owners in sorted(domain_owners.items()):
+        all_owners = owners | any_owners
+        pattern = re.escape(domain)
+        lines.append(f"/^[^@]+@{pattern}$/i {','.join(sorted(all_owners))}\n")
+
+    if any_owners:
+        lines.append(f"/^.+$/ {','.join(sorted(any_owners))}\n")
+
+    temporary = f"{SENDER_LOGIN_MAP_FILE}.tmp"
+    with open(temporary, "w") as sender_map:
+        sender_map.writelines(lines)
+    os.replace(temporary, SENDER_LOGIN_MAP_FILE)
 
 
 def expire_login_blocks():
@@ -615,10 +743,25 @@ def wait_for_database(max_retries=30, delay=2):
             )
             time.sleep(delay)
 
+
+def ensure_sender_rule_columns():
+    """Add sender-rule columns when a database was initialized by an older image."""
+    statements = (
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+        "allowed_sender_domain VARCHAR(255) NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+        "allow_any_sender TINYINT(1) NOT NULL DEFAULT 0",
+    )
+    with db.engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
 with app.app_context():
     wait_for_database()
     app.logger.info("Initialisiere Datenbankschema.")
     db.create_all()
+    ensure_sender_rule_columns()
     # Beim Start sicherstellen, dass Postfix eine aktuelle Konfiguration
     # vorfindet - auch wenn seit dem letzten GUI-Save nichts geaendert wurde
     # (z.B. nach einem "docker compose down/up" mit frischem Postfix-Volume).
@@ -628,6 +771,7 @@ with app.app_context():
         if _settings.smarthost:
             write_postfix_config(_settings)
         write_client_access_map()
+        write_sender_login_map()
     except Exception as exc:  # pragma: no cover
         app.logger.warning("Konnte Smarthost-Konfiguration nicht schreiben: %s", exc)
 

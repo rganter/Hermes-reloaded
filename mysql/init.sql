@@ -3,8 +3,19 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(190) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,   -- SHA512-CRYPT Hash (kompatibel zu Dovecot)
   active TINYINT(1) NOT NULL DEFAULT 1,
+  allowed_sender_domain VARCHAR(255) NULL,
+  allow_any_sender TINYINT(1) NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_sender_addresses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  sender_address VARCHAR(320) NOT NULL,
+  UNIQUE KEY uq_user_sender_address (user_id, sender_address),
+  CONSTRAINT fk_sender_address_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Einzelne Konfigurationszeile (Singleton, id = 1) fuer den vorgelagerten

@@ -19,7 +19,8 @@ Scanner/System --(SMTP + Auth, Port 587)--> Postfix --(SASL-Check)--> Dovecot --
 - **Dovecot**: läuft NUR als SASL-Auth-Server (kein IMAP/POP3), prüft
   Benutzer/Passwort gegen die MySQL-Tabelle `users`.
 - **MySQL/MariaDB**: speichert die Benutzer (Passwort als SHA512-CRYPT-Hash)
-  sowie die Smarthost-Konfiguration (Tabelle `settings`).
+  samt erlaubten Envelope-Absendern sowie die Smarthost-Konfiguration
+  (Tabelle `settings`).
 - **WebGUI (Flask)**: Verwaltung der Benutzer (Anlegen/Bearbeiten/Löschen/
   Aktivieren-Deaktivieren), Pflege der Smarthost-Zugangsdaten, sowie
   Ansicht/Filterung der Postfix-Logs.
@@ -89,6 +90,17 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
    - Port: `587` (STARTTLS/Submission) **oder** `25` (klassisches SMTP) –
      beide verlangen SASL-Authentifizierung
    - Authentifizierung: der in der WebGUI angelegte Benutzer
+   - Envelope-Absender (`MAIL FROM`): eine beim Benutzer erlaubte Adresse
+
+### Absenderberechtigungen
+
+Jeder SMTP-Benutzer benoetigt mindestens eine Absenderregel. Moeglich sind
+mehrere einzelne Mailadressen, eine komplette Domain oder als bewusst
+freizugebende Ausnahme beliebige Absender. Postfix vergleicht den
+authentifizierten SASL-Benutzer mit dem Envelope-Absender aus `MAIL FROM` und
+weist unberechtigte Kombinationen bereits im SMTP-Dialog mit einem Fehler ab.
+Die Domainregel umfasst nur die angegebene Domain, nicht deren Subdomains.
+Der sichtbare `From:`-Header wird nicht veraendert oder geprueft.
 
 ## Sicherheitshinweise
 

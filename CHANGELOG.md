@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2 - 2026-07-24
+
+### Hinzugefuegt
+
+- Pro SMTP-Benutzer konfigurierbare Envelope-Absender: mehrere einzelne
+  Adressen, eine komplette Domain oder eine Ausnahme fuer beliebige Absender.
+- Postfix weist `MAIL FROM`-Adressen ab, die nicht zum authentifizierten
+  SASL-Benutzer gehoeren.
+
 ## 2.1 - 2026-07-23
 
 ### Hinzugefuegt

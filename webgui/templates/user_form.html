@@ -22,6 +22,30 @@
             </label>
             <input type="password" name="password" class="form-control" {% if not user %}required{% endif %}>
           </div>
+          <div class="mb-3">
+            <label class="form-label" for="sender_addresses">Erlaubte Absenderadressen</label>
+            <textarea name="sender_addresses" id="sender_addresses" class="form-control"
+                      rows="4" placeholder="scanner@example.com&#10;buchhaltung@example.com">{% if user %}{{ user.sender_addresses | map(attribute='sender_address') | join('\n') }}{% else %}{{ request.form.get('sender_addresses', '') }}{% endif %}</textarea>
+            <div class="form-text">Eine Adresse pro Zeile; Komma und Semikolon sind ebenfalls erlaubt.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="allowed_sender_domain">Erlaubte Absenderdomain</label>
+            <div class="input-group">
+              <span class="input-group-text">@</span>
+              <input type="text" name="allowed_sender_domain" id="allowed_sender_domain"
+                     class="form-control" placeholder="example.com"
+                     value="{{ user.allowed_sender_domain if user else request.form.get('allowed_sender_domain', '') }}">
+            </div>
+            <div class="form-text">Erlaubt jede Adresse dieser Domain, jedoch keine Subdomains.</div>
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" name="allow_any_sender" class="form-check-input"
+                   id="allow_any_sender"
+                   {% if (user and user.allow_any_sender) or (not user and request.form.get('allow_any_sender')) %}checked{% endif %}>
+            <label class="form-check-label" for="allow_any_sender">
+              Ausnahme: beliebige Absenderadresse erlauben
+            </label>
+          </div>
           <div class="form-check mb-3">
             <input type="checkbox" name="active" class="form-check-input" id="active"
                    {% if not user or user.active %}checked{% endif %}>

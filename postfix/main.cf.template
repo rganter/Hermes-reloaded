@@ -31,6 +31,8 @@ smtpd_tls_security_level = may
 
 smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
 smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
+smtpd_sender_login_maps = regexp:/shared/sender_login_maps
+smtpd_sender_restrictions = reject_authenticated_sender_login_mismatch
 # Die dynamische IP-Sperrliste wird beim Start gesetzt, sobald die WebGUI ihre
 # Access-Map angelegt hat. Weitere Relay-Pruefungen erfolgen separat ueber
 # smtpd_relay_restrictions.
