@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">Postfix-Mailqueue</h4>
+    <div class="text-muted small">
+      {{ messages|length }} Nachricht(en), {{ total_size|filesizeformat }}
+      {% if snapshot_time %}
+        &middot; Stand: {{ snapshot_time.strftime('%d.%m.%Y %H:%M:%S') }}
+      {% else %}
+        &middot; Noch kein Queue-Snapshot verfuegbar
+      {% endif %}
+    </div>
+  </div>
+  <a href="{{ url_for('mail_queue') }}" class="btn btn-sm btn-outline-secondary">Aktualisieren</a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle bg-white shadow-sm">
+    <thead>
+      <tr>
+        <th>Queue-ID</th>
+        <th>Eingang</th>
+        <th>Absender</th>
+        <th>Empfaenger / Status</th>
+        <th>Groesse</th>
+        <th class="text-end">Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for message in messages %}
+      <tr>
+        <td>
+          <code>{{ message.queue_id }}</code>
+          {% if message.queue_name %}
+            <div class="text-muted small">{{ message.queue_name }}</div>
+          {% endif %}
+        </td>
+        <td class="text-nowrap">
+          {{ message.arrival_datetime.strftime('%d.%m.%Y %H:%M:%S') if message.arrival_datetime else '-' }}
+        </td>
+        <td>{% if message.sender %}{{ message.sender }}{% else %}&lt;&gt;{% endif %}</td>
+        <td>
+          {% for recipient in message.recipients or [] %}
+            <div>{{ recipient.address }}</div>
+            {% if recipient.delay_reason %}
+              <div class="text-danger small">{{ recipient.delay_reason }}</div>
+            {% endif %}
+          {% endfor %}
+        </td>
+        <td class="text-nowrap">{{ message.message_size|filesizeformat }}</td>
+        <td class="text-end">
+          <div class="d-flex justify-content-end gap-2">
+          {% if message.queue_name == 'deferred' %}
+          <form method="post" action="{{ url_for('retry_queued_mail', queue_id=message.queue_id) }}">
+            <button type="submit" class="btn btn-sm btn-primary"
+                    onclick="return confirm('Zustellung dieser Nachricht jetzt erneut versuchen?');">
+              Erneut zustellen
+            </button>
+          </form>
+          {% else %}
+            <span class="text-muted small">bereits in Bearbeitung</span>
+          {% endif %}
+          <form method="post" action="{{ url_for('delete_queued_mail', queue_id=message.queue_id) }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('Diese Nachricht unwiderruflich aus der Mailqueue loeschen?');">
+              Loeschen
+            </button>
+          </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center text-muted py-4">
+          {% if snapshot_time %}
+            Die Mailqueue ist leer.
+          {% else %}
+            Postfix hat noch keinen Queue-Snapshot bereitgestellt.
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="text-muted small">
+  Die Anzeige wird von Postfix etwa alle fuenf Sekunden aktualisiert.
+  „Erneut zustellen“ plant einen sofortigen Zustellversuch fuer die gewaehlte
+  Nachricht ein; die Nachricht wird dabei nicht dupliziert. „Loeschen“
+  entfernt sie unwiderruflich aus der Postfix-Queue.
+</p>
+{% endblock %}

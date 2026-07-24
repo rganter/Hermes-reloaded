@@ -8,6 +8,8 @@
   Adressen, eine komplette Domain oder eine Ausnahme fuer beliebige Absender.
 - Postfix weist `MAIL FROM`-Adressen ab, die nicht zum authentifizierten
   SASL-Benutzer gehoeren.
+- Mailqueue-Uebersicht in der WebGUI mit gezielter erneuter Zustellung
+  oder Loeschung einzelner Nachrichten.
 
 ## 2.1 - 2026-07-23
 

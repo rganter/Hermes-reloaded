@@ -70,4 +70,40 @@ postfix check
   done
 ) &
 
+# Queue-Snapshot fuer die WebGUI sowie kontrollierte Retry- und Loeschauftraege.
+# Queue-IDs werden auch hier validiert, sodass das gemeinsame Volume keine
+# beliebigen Kommandos in den Postfix-Container einschleusen kann.
+mkdir -p /shared/queue_commands
+(
+  while true; do
+    sleep 5
+
+    if postqueue -j > /shared/mail_queue.json.tmp 2>/dev/null; then
+      mv /shared/mail_queue.json.tmp /shared/mail_queue.json
+    else
+      rm -f /shared/mail_queue.json.tmp
+    fi
+
+    for QUEUE_COMMAND in /shared/queue_commands/*.retry /shared/queue_commands/*.delete; do
+      [ -e "$QUEUE_COMMAND" ] || continue
+      QUEUE_ID="$(tr -d '\r\n' < "$QUEUE_COMMAND")"
+      case "$QUEUE_ID" in
+        ""|*[!A-Za-z0-9]*)
+          ;;
+        *)
+          case "$QUEUE_COMMAND" in
+            *.retry)
+              postqueue -i "$QUEUE_ID" 2>/dev/null || true
+              ;;
+            *.delete)
+              postqueue -d "$QUEUE_ID" 2>/dev/null || true
+              ;;
+          esac
+          ;;
+      esac
+      rm -f "$QUEUE_COMMAND"
+    done
+  done
+) &
+
 exec /usr/sbin/postfix start-fg

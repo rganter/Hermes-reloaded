@@ -2,7 +2,9 @@ import os
 import re
 import time
 import ipaddress
+import json
 import threading
+import uuid
 from datetime import timedelta
 from datetime import datetime
 
@@ -49,6 +51,9 @@ LOGO_MIMETYPES = {
 }
 CLIENT_ACCESS_FILE = os.path.join(SHARED_DIR, "client_access")
 SENDER_LOGIN_MAP_FILE = os.path.join(SHARED_DIR, "sender_login_maps")
+MAIL_QUEUE_FILE = os.path.join(SHARED_DIR, "mail_queue.json")
+MAIL_QUEUE_COMMAND_DIR = os.path.join(SHARED_DIR, "queue_commands")
+QUEUE_ID_PATTERN = re.compile(r"^[A-Za-z0-9]{1,64}$")
 LOGIN_FAILURE_PATTERN = re.compile(
     r"\[(?P<ip>[^\]]+)\]: SASL .*authentication failed", re.IGNORECASE
 )
@@ -708,6 +713,103 @@ def logs():
         lines.reverse()  # neueste zuerst
 
     return render_template("logs.html", lines=lines, search=search, log_file=LOG_FILE)
+
+
+def read_mail_queue():
+    """Read Postfix' line-delimited JSON queue snapshot."""
+    messages = []
+    if not os.path.isfile(MAIL_QUEUE_FILE):
+        return messages, None
+
+    try:
+        snapshot_time = datetime.fromtimestamp(os.path.getmtime(MAIL_QUEUE_FILE))
+        with open(MAIL_QUEUE_FILE, "r", encoding="utf-8") as queue_file:
+            for line in queue_file:
+                if not line.strip():
+                    continue
+                message = json.loads(line)
+                arrival_time = message.get("arrival_time")
+                message["arrival_datetime"] = (
+                    datetime.fromtimestamp(arrival_time) if arrival_time else None
+                )
+                messages.append(message)
+        messages.sort(key=lambda item: item.get("arrival_time", 0))
+        return messages, snapshot_time
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        app.logger.warning("Mailqueue-Snapshot konnte nicht gelesen werden: %s", exc)
+        return [], None
+
+
+@app.route("/queue")
+@login_required
+def mail_queue():
+    messages, snapshot_time = read_mail_queue()
+    total_size = sum(message.get("message_size", 0) for message in messages)
+    return render_template(
+        "queue.html",
+        messages=messages,
+        snapshot_time=snapshot_time,
+        total_size=total_size,
+    )
+
+
+@app.route("/queue/<queue_id>/retry", methods=["POST"])
+@login_required
+def retry_queued_mail(queue_id):
+    if not QUEUE_ID_PATTERN.fullmatch(queue_id):
+        flash("Ungueltige Queue-ID.", "danger")
+        return redirect(url_for("mail_queue"))
+
+    messages, _ = read_mail_queue()
+    queued_message = next(
+        (message for message in messages if message.get("queue_id") == queue_id),
+        None,
+    )
+    if queued_message is None or queued_message.get("queue_name") != "deferred":
+        flash(
+            "Die Nachricht ist nicht mehr in der Deferred-Queue.",
+            "warning",
+        )
+        return redirect(url_for("mail_queue"))
+
+    write_queue_command(queue_id, "retry")
+
+    flash(
+        f"Die erneute Zustellung von Queue-Eintrag {queue_id} wurde angefordert.",
+        "success",
+    )
+    return redirect(url_for("mail_queue"))
+
+
+def write_queue_command(queue_id, command):
+    """Atomically hand a validated queue command to the Postfix container."""
+    os.makedirs(MAIL_QUEUE_COMMAND_DIR, exist_ok=True)
+    request_name = f"{uuid.uuid4().hex}.{command}"
+    target = os.path.join(MAIL_QUEUE_COMMAND_DIR, request_name)
+    temporary = f"{target}.tmp"
+    with open(temporary, "w", encoding="ascii") as request_file:
+        request_file.write(queue_id + "\n")
+    os.replace(temporary, target)
+
+
+@app.route("/queue/<queue_id>/delete", methods=["POST"])
+@login_required
+def delete_queued_mail(queue_id):
+    if not QUEUE_ID_PATTERN.fullmatch(queue_id):
+        flash("Ungueltige Queue-ID.", "danger")
+        return redirect(url_for("mail_queue"))
+
+    messages, _ = read_mail_queue()
+    if not any(message.get("queue_id") == queue_id for message in messages):
+        flash("Die Nachricht ist nicht mehr in der Mailqueue.", "warning")
+        return redirect(url_for("mail_queue"))
+
+    write_queue_command(queue_id, "delete")
+    flash(
+        f"Das Loeschen von Queue-Eintrag {queue_id} wurde angefordert.",
+        "success",
+    )
+    return redirect(url_for("mail_queue"))
 
 
 # ---------------------------------------------------------------------------

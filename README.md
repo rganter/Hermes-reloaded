@@ -23,7 +23,7 @@ Scanner/System --(SMTP + Auth, Port 587)--> Postfix --(SASL-Check)--> Dovecot --
   (Tabelle `settings`).
 - **WebGUI (Flask)**: Verwaltung der Benutzer (Anlegen/Bearbeiten/Löschen/
   Aktivieren-Deaktivieren), Pflege der Smarthost-Zugangsdaten, sowie
-  Ansicht/Filterung der Postfix-Logs.
+  Ansicht/Filterung der Postfix-Logs und Verwaltung der Postfix-Mailqueue.
 
 ### Dynamische Smarthost-Konfiguration
 
@@ -123,6 +123,15 @@ Der sichtbare `From:`-Header wird nicht veraendert oder geprueft.
 Die WebGUI liest `/var/log/postfix/mail.log` (per Docker-Volume aus dem
 Postfix-Container gemountet) und zeigt die letzten Einträge, mit einfacher
 Volltextfilterung (z.B. nach Benutzername, Absender oder Statuscode).
+
+## Mailqueue
+
+Unter **Mailqueue** zeigt die WebGUI die wartenden Postfix-Nachrichten mit
+Queue-ID, Einlieferungszeit, Absender, Empfaengern, Groesse und dem letzten
+Verzoegerungsgrund. Fuer jeden Eintrag kann gezielt ein sofortiger erneuter
+Zustellversuch angefordert oder die Nachricht unwiderruflich aus der Queue
+geloescht werden. Postfix aktualisiert die Ansicht etwa alle fuenf Sekunden;
+beim erneuten Zustellen wird keine Kopie der Nachricht erzeugt.
 
 ## Login-Schutz
 

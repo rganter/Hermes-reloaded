@@ -72,7 +72,8 @@ services:
     volumes:
       - dovecot_auth:/var/spool/postfix-auth
       - maillog:/var/log/postfix
-      - smarthost_config:/shared:ro
+      # Postfix schreibt Queue-Snapshots und verarbeitet Retry-Auftraege.
+      - smarthost_config:/shared:rw
     networks:
       - smtp_internal
 
