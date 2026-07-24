@@ -1,4 +1,4 @@
-# Hermes 2.1 - SMTP-Relay mit User-Authentifizierung (Postfix + Dovecot-SASL + MariaDB + WebGUI)
+# Hermes 2.2 - SMTP-Relay mit User-Authentifizierung (Postfix + Dovecot-SASL + MariaDB + WebGUI)
 
 Ein schlanker SMTP-Relay-Server für interne Systeme (z.B. Scanner, Applikationen),
 die per Benutzername/Passwort authentifiziert Mails über einen vorgelagerten
