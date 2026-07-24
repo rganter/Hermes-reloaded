@@ -66,6 +66,8 @@ ausschließlich die WebGUI/Datenbank maßgeblich.
    - `MAIL_DOMAIN`: eure Absenderdomain.
    - `POSTFIX_FQDN`: vollständiger Hostname von Postfix, z.B.
      `relay.example.com`. Ohne Angabe wird `relay.<MAIL_DOMAIN>` verwendet.
+     Beim ersten Start erzeugt Postfix fuer diesen Namen automatisch ein
+     selbstsigniertes TLS-Zertifikat mit passendem DNS-SAN.
    - `SMTP_PORT` / `SUBMISSION_PORT` / `WEBGUI_PORT`: nach außen
      veröffentlichte Host-Ports für SMTP, Submission und WebGUI; standardmäßig
      `25`, `587` und `8080`. Die Container verwenden intern weiterhin die
@@ -115,9 +117,14 @@ Der sichtbare `From:`-Header wird nicht veraendert oder geprueft.
   UID-Namespaces haben. Das ist für ein internes, isoliertes Docker-Netz
   unkritisch, sollte aber nicht in geteilten/Multi-Tenant-Umgebungen so
   bleiben.
-- Für Produktivbetrieb: TLS-Zertifikat für Postfix hinterlegen (aktuell
-  `smtpd_tls_security_level = may`, d.h. TLS ist möglich aber nicht
-  erzwungen) und Port 587 nicht ungeschützt ins Internet exponieren.
+- Beim ersten Start erzeugt Postfix ein zehn Jahre gueltiges selbstsigniertes
+  TLS-Zertifikat fuer `POSTFIX_FQDN`. Zertifikat und Schluessel liegen
+  persistent im Volume `postfix_tls` und werden bei weiteren Starts nicht
+  ueberschrieben. Ein eigenes Zertifikat kann als `/etc/postfix/tls/postfix.crt`
+  samt Schluessel `/etc/postfix/tls/postfix.key` bereitgestellt werden. Beide
+  Dateien muessen gemeinsam vorhanden sein. TLS ist mit
+  `smtpd_tls_security_level = may` moeglich, aber nicht erzwungen; Port 587
+  sollte daher nicht ungeschuetzt ins Internet exponiert werden.
 - Passwörter werden als `SHA512-CRYPT` gespeichert (kompatibel mit
   Dovecots `passdb sql`), niemals im Klartext.
 - Die WebGUI hat aktuell einen einzelnen Admin-Account aus den

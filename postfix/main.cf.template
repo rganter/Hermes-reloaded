@@ -28,6 +28,8 @@ smtpd_sasl_path = /var/spool/postfix-auth/auth
 smtpd_sasl_auth_enable = yes
 smtpd_sasl_security_options = noanonymous
 smtpd_tls_security_level = may
+smtpd_tls_cert_file = /etc/postfix/tls/postfix.crt
+smtpd_tls_key_file = /etc/postfix/tls/postfix.key
 
 smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
 smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination

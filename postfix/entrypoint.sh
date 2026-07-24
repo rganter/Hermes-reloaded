@@ -5,12 +5,47 @@ set -e
 # Hostnamensschema bei.
 POSTFIX_FQDN="${POSTFIX_FQDN:-relay.${MAIL_DOMAIN}}"
 
+case "$POSTFIX_FQDN" in
+  ""|.*|*.|*..*|*[!A-Za-z0-9.-]*)
+    echo "Ungueltiger POSTFIX_FQDN fuer das TLS-Zertifikat: ${POSTFIX_FQDN}" >&2
+    exit 1
+    ;;
+esac
+
 envsubst '${MAIL_DOMAIN} ${MYNETWORKS} ${POSTFIX_FQDN}' \
   < /etc/postfix/main.cf.template \
   > /etc/postfix/main.cf
 
-mkdir -p /var/log/postfix /var/spool/postfix-auth
+TLS_CERT_FILE=/etc/postfix/tls/postfix.crt
+TLS_KEY_FILE=/etc/postfix/tls/postfix.key
+
+mkdir -p /var/log/postfix /var/spool/postfix-auth /etc/postfix/tls
 chown postfix:postfix /var/log/postfix
+
+if [ -f "$TLS_CERT_FILE" ] && [ -f "$TLS_KEY_FILE" ]; then
+  echo "Verwende vorhandenes TLS-Zertifikat fuer ${POSTFIX_FQDN}."
+elif [ ! -e "$TLS_CERT_FILE" ] && [ ! -e "$TLS_KEY_FILE" ]; then
+  echo "Erzeuge selbstsigniertes TLS-Zertifikat fuer ${POSTFIX_FQDN}."
+  TLS_CERT_TEMP="${TLS_CERT_FILE}.new"
+  TLS_KEY_TEMP="${TLS_KEY_FILE}.new"
+  rm -f "$TLS_CERT_TEMP" "$TLS_KEY_TEMP"
+  umask 077
+  openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+    -days 3650 \
+    -subj "/CN=${POSTFIX_FQDN}" \
+    -addext "subjectAltName=DNS:${POSTFIX_FQDN}" \
+    -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+    -addext "extendedKeyUsage=serverAuth" \
+    -keyout "$TLS_KEY_TEMP" \
+    -out "$TLS_CERT_TEMP"
+  chmod 600 "$TLS_KEY_TEMP"
+  chmod 644 "$TLS_CERT_TEMP"
+  mv "$TLS_KEY_TEMP" "$TLS_KEY_FILE"
+  mv "$TLS_CERT_TEMP" "$TLS_CERT_FILE"
+else
+  echo "TLS-Konfiguration unvollstaendig: Zertifikat und Schluessel muessen gemeinsam vorhanden sein." >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Smarthost-Konfiguration wird von der WebGUI in /shared abgelegt:

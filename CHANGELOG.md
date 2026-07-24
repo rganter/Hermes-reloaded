@@ -11,6 +11,8 @@
 - Mailqueue-Uebersicht in der WebGUI mit gezielter erneuter Zustellung
   oder Loeschung einzelner Nachrichten.
 - Ueber die WebGUI konfigurierbares Postfix-`message_size_limit`.
+- Automatische Erzeugung und persistente Speicherung eines selbstsignierten
+  TLS-Zertifikats fuer `POSTFIX_FQDN`, sofern kein eigenes Zertifikat vorliegt.
 
 ## 2.1 - 2026-07-23
 

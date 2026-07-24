@@ -74,6 +74,7 @@ services:
       - maillog:/var/log/postfix
       # Postfix schreibt Queue-Snapshots und verarbeitet Retry-Auftraege.
       - smarthost_config:/shared:rw
+      - postfix_tls:/etc/postfix/tls
     networks:
       - smtp_internal
 
@@ -112,6 +113,7 @@ volumes:
   dovecot_auth:
   maillog:
   smarthost_config:
+  postfix_tls:
 
 networks:
   smtp_internal:
